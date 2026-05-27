@@ -1,0 +1,26 @@
+# Tool & MCP-server whitelist for VP-CTO. The orchestrator injects credentials at
+# runtime — Ethan's prompt never sees raw API keys.
+#
+# `spawn_worker` is the planner-executor escape hatch: any VP can call it to
+# delegate work to an ephemeral Haiku subagent. Subagents inherit a subset of
+# the parent VP's tools (specified per-spawn).
+
+built_in:
+  - spawn_worker          # delegate to a Haiku subagent
+  - read_briefing_history # read his own past briefings
+  - write_briefing        # file a new briefing
+  - read_objectives       # read his own objectives file
+
+mcp_servers: []
+  # Future placeholders — examples of what could live here once we add MCP support:
+  # - id: github
+  #   scopes: ["read:repo", "read:issues"]
+  # - id: sentry
+  #   scopes: ["read:incidents"]
+  # - id: linear
+  #   scopes: ["read:issues", "comment:issues"]
+
+worker_tool_allowlist:
+  # When Ethan spawns a worker, the worker is constrained to this subset.
+  - WebFetch
+  - WebSearch

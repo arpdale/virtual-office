@@ -1,0 +1,690 @@
+/**
+ * Full-screen overlay for one boardroom VP. Five tabs:
+ *
+ *   Profile        — persona, objectives, core_facts (read)
+ *   Recent Work    — directive_history list
+ *   Memory         — typed memories, with "pin to core" button
+ *   Chat           — SSE streaming chat
+ *   Personality    — editable persona_body + objectives (PATCH on save)
+ *
+ * Closes on Esc, on click outside, or on the close button.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import {
+  type CoreFact,
+  type DirectiveRow,
+  type MemoryRow,
+  type MemoryType,
+  type VPProfile,
+  getVP,
+  getVPHistory,
+  getVPMemories,
+  patchVP,
+  pinCoreFact,
+  streamChat,
+  unpinCoreFact,
+} from '../services/boardroom.js';
+import { Button } from './ui/Button.js';
+
+type TabId = 'profile' | 'history' | 'memory' | 'chat' | 'personality';
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'history', label: 'Recent Work' },
+  { id: 'memory', label: 'Memory' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'personality', label: 'Personality' },
+];
+
+interface Props {
+  vpId: string;
+  onClose: () => void;
+}
+
+export function VPOverlay({ vpId, onClose }: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>('chat');
+  const [profile, setProfile] = useState<VPProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load profile on mount + whenever vpId changes
+  useEffect(() => {
+    let cancelled = false;
+    setProfile(null);
+    setError(null);
+    getVP(vpId)
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vpId]);
+
+  // Esc key to close
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 bg-black/70"
+        style={{ zIndex: 60 }}
+        onClick={onClose}
+      />
+      <div
+        className="fixed inset-12 bg-bg border-2 border-border rounded-none shadow-pixel flex flex-col"
+        style={{ zIndex: 61 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between py-4 px-10 border-b border-border">
+          <div className="flex flex-col">
+            <span className="text-accent-bright text-2xl">
+              {profile ? profile.name : '...'}
+            </span>
+            <span className="text-text-muted text-sm">
+              {profile ? profile.role : ''}
+            </span>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            x
+          </Button>
+        </div>
+
+        {/* Tab strip */}
+        <div className="flex border-b border-border">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={
+                'py-3 px-8 text-base border-r border-border cursor-pointer ' +
+                (activeTab === t.id
+                  ? 'bg-active-bg text-accent-bright'
+                  : 'bg-transparent text-text-muted hover:text-text')
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-hidden">
+          {error && (
+            <div className="p-10 text-red-400">Error: {error}</div>
+          )}
+          {!profile && !error && (
+            <div className="p-10 text-text-muted">Loading…</div>
+          )}
+          {profile && (
+            <>
+              {activeTab === 'profile' && <ProfileTab profile={profile} />}
+              {activeTab === 'history' && <HistoryTab vpId={vpId} />}
+              {activeTab === 'memory' && (
+                <MemoryTab vpId={vpId} onProfileChanged={setProfile} />
+              )}
+              {activeTab === 'chat' && (
+                <ChatTab vpId={vpId} vpName={profile.name} />
+              )}
+              {activeTab === 'personality' && (
+                <PersonalityTab
+                  profile={profile}
+                  onSaved={setProfile}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Profile tab ─────────────────────────────────────────────
+
+function ProfileTab({ profile }: { profile: VPProfile }) {
+  return (
+    <div className="h-full overflow-y-auto p-10">
+      <p className="text-text-muted mb-6 italic">{profile.description}</p>
+
+      <Section title="Core facts (always in prompt)">
+        {profile.core_facts.length === 0 ? (
+          <p className="text-text-muted text-sm">
+            None yet. Pin facts from the Memory tab to anchor this VP.
+          </p>
+        ) : (
+          <ul className="m-0 pl-8 list-disc">
+            {profile.core_facts.map((f) => (
+              <li key={f.id} className="text-sm mb-2">
+                {f.content}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Objectives">
+        <pre className="text-xs text-text-muted whitespace-pre-wrap font-mono">
+          {Object.keys(profile.objectives).length === 0
+            ? '(none)'
+            : JSON.stringify(profile.objectives, null, 2)}
+        </pre>
+      </Section>
+
+      <Section title="Persona">
+        <pre className="text-sm text-text whitespace-pre-wrap font-sans">
+          {profile.persona_body}
+        </pre>
+      </Section>
+
+      <Section title="Stats">
+        <p className="text-sm text-text-muted">
+          {profile.directive_count} directives · {profile.memory_count} memories
+        </p>
+      </Section>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mb-8">
+      <h3 className="text-accent text-lg mb-2">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+// ── History tab ─────────────────────────────────────────────
+
+function HistoryTab({ vpId }: { vpId: string }) {
+  const [rows, setRows] = useState<DirectiveRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    setError(null);
+    getVPHistory(vpId, 50)
+      .then((r) => {
+        if (!cancelled) setRows(r);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vpId]);
+
+  if (error) return <div className="p-10 text-red-400">Error: {error}</div>;
+  if (!rows) return <div className="p-10 text-text-muted">Loading…</div>;
+  if (rows.length === 0)
+    return (
+      <div className="p-10 text-text-muted">
+        No directives yet. Open the Chat tab to start.
+      </div>
+    );
+
+  return (
+    <div className="h-full overflow-y-auto p-10 space-y-6">
+      {rows.map((d) => (
+        <div
+          key={d.id}
+          className="border border-border p-6 bg-active-bg/30 rounded-none"
+        >
+          <div className="flex justify-between mb-2">
+            <span className="text-xs text-text-muted">
+              {new Date(d.created_at).toLocaleString()}
+            </span>
+            <span className="text-xs text-text-muted uppercase">
+              {d.target_scope}
+            </span>
+          </div>
+          <div className="text-sm font-bold mb-2 text-accent">You said:</div>
+          <p className="text-sm mb-4 whitespace-pre-wrap">{d.directive}</p>
+          <div className="text-sm font-bold mb-2 text-accent-bright">
+            Response:
+          </div>
+          <p className="text-sm whitespace-pre-wrap">{d.response}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Memory tab ──────────────────────────────────────────────
+
+const MEMORY_TYPES: MemoryType[] = ['preference', 'fact', 'relationship', 'pattern'];
+
+function MemoryTab({
+  vpId,
+  onProfileChanged,
+}: {
+  vpId: string;
+  onProfileChanged: (p: VPProfile) => void;
+}) {
+  const [rows, setRows] = useState<MemoryRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<MemoryType | 'all'>('all');
+  const [pinningId, setPinningId] = useState<string | null>(null);
+
+  const reload = useCallback(() => {
+    let cancelled = false;
+    setError(null);
+    getVPMemories(vpId, { limit: 500 })
+      .then((r) => {
+        if (!cancelled) setRows(r);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vpId]);
+
+  useEffect(() => {
+    setRows(null);
+    reload();
+  }, [reload]);
+
+  const visible = useMemo(() => {
+    if (!rows) return null;
+    if (filter === 'all') return rows;
+    return rows.filter((r) => r.memory_type === filter);
+  }, [rows, filter]);
+
+  const onPin = useCallback(
+    async (mem: MemoryRow) => {
+      setPinningId(mem.id);
+      try {
+        await pinCoreFact(vpId, mem.content);
+        // Refresh profile so core_facts list updates
+        const fresh = await getVP(vpId);
+        onProfileChanged(fresh);
+      } catch (e: unknown) {
+        setError(String(e));
+      } finally {
+        setPinningId(null);
+      }
+    },
+    [vpId, onProfileChanged],
+  );
+
+  if (error) return <div className="p-10 text-red-400">Error: {error}</div>;
+  if (!visible) return <div className="p-10 text-text-muted">Loading…</div>;
+
+  return (
+    <div className="h-full overflow-y-auto p-10">
+      {/* Filter chips */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>
+          all
+        </FilterChip>
+        {MEMORY_TYPES.map((t) => (
+          <FilterChip
+            key={t}
+            active={filter === t}
+            onClick={() => setFilter(t)}
+          >
+            {t}
+          </FilterChip>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="text-text-muted">
+          No memories of this type yet. Have a conversation in the Chat tab to
+          generate some.
+        </p>
+      ) : (
+        <ul className="m-0 p-0 list-none space-y-3">
+          {visible.map((m) => (
+            <li
+              key={m.id}
+              className="border border-border p-4 flex justify-between items-start gap-4"
+            >
+              <div className="flex-1">
+                <div className="flex gap-2 items-center mb-1">
+                  <span className="text-xs uppercase text-accent">
+                    {m.memory_type}
+                  </span>
+                  <span className="text-xs text-text-muted">
+                    {new Date(m.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-sm m-0">{m.content}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="default"
+                disabled={pinningId === m.id}
+                onClick={() => void onPin(m)}
+              >
+                {pinningId === m.id ? '…' : 'Pin'}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        'border-2 py-1 px-4 text-xs rounded-none cursor-pointer uppercase ' +
+        (active
+          ? 'bg-active-bg border-accent text-accent-bright'
+          : 'bg-transparent border-border text-text-muted hover:text-text')
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Chat tab ────────────────────────────────────────────────
+
+interface ChatMessage {
+  who: 'you' | 'vp';
+  text: string;
+  pending?: boolean;
+  directiveId?: string;
+}
+
+function ChatTab({ vpId, vpName }: { vpId: string; vpName: string }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom whenever messages grow or stream tokens arrive
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  const send = useCallback(async () => {
+    const text = draft.trim();
+    if (!text || streaming) return;
+    setError(null);
+    setDraft('');
+    setStreaming(true);
+
+    setMessages((prev) => [
+      ...prev,
+      { who: 'you', text },
+      { who: 'vp', text: '', pending: true },
+    ]);
+
+    try {
+      await streamChat(vpId, text, {
+        onMeta: (id) => {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last) last.directiveId = id;
+            return next;
+          });
+        },
+        onToken: (chunk) => {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last) last.text = (last.text ?? '') + chunk;
+            return next;
+          });
+        },
+        onWarn: (msg) => {
+          // eslint-disable-next-line no-console
+          console.warn(`[boardroom chat] ${msg}`);
+        },
+        onError: (msg) => setError(msg),
+        onDone: () => {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last) last.pending = false;
+            return next;
+          });
+        },
+      });
+    } catch (e: unknown) {
+      setError(String(e));
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last) last.pending = false;
+        return next;
+      });
+    } finally {
+      setStreaming(false);
+    }
+  }, [draft, vpId, streaming]);
+
+  return (
+    <div className="h-full flex flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-10 space-y-4">
+        {messages.length === 0 && (
+          <p className="text-text-muted italic">
+            Say something to {vpName}. They have their persona, objectives,
+            core_facts, and recent memories already loaded.
+          </p>
+        )}
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={
+              m.who === 'you'
+                ? 'border-l-4 border-accent pl-4'
+                : 'border-l-4 border-accent-bright pl-4'
+            }
+          >
+            <div className="text-xs text-text-muted uppercase mb-1">
+              {m.who === 'you' ? 'you' : vpName}
+              {m.pending && ' · …'}
+            </div>
+            <p className="text-sm whitespace-pre-wrap m-0">{m.text}</p>
+          </div>
+        ))}
+        {error && (
+          <p className="text-red-400 text-sm">Error: {error}</p>
+        )}
+      </div>
+
+      <div className="border-t border-border p-4 flex gap-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter inserts a newline. Cmd/Ctrl+Enter also sends
+            // for old-habit keyboards.
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+          placeholder="Type a directive… (Enter to send, Shift+Enter for newline)"
+          rows={2}
+          disabled={streaming}
+          className="flex-1 bg-bg text-text border-2 border-border rounded-none p-3 font-sans text-sm resize-none focus:border-accent focus:outline-none"
+        />
+        <Button
+          variant="accent"
+          size="md"
+          onClick={() => void send()}
+          disabled={streaming || !draft.trim()}
+        >
+          {streaming ? 'Sending' : 'Send'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Personality tab ─────────────────────────────────────────
+
+function PersonalityTab({
+  profile,
+  onSaved,
+}: {
+  profile: VPProfile;
+  onSaved: (p: VPProfile) => void;
+}) {
+  const [personaDraft, setPersonaDraft] = useState(profile.persona_body);
+  const [descDraft, setDescDraft] = useState(profile.description);
+  const [objectivesDraft, setObjectivesDraft] = useState(
+    JSON.stringify(profile.objectives, null, 2),
+  );
+  const [coreFactsView, setCoreFactsView] = useState<CoreFact[]>(profile.core_facts);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dirty =
+    personaDraft !== profile.persona_body ||
+    descDraft !== profile.description ||
+    objectivesDraft !== JSON.stringify(profile.objectives, null, 2);
+
+  const save = useCallback(async () => {
+    setError(null);
+    let objectives: Record<string, unknown>;
+    try {
+      objectives = JSON.parse(objectivesDraft) as Record<string, unknown>;
+    } catch {
+      setError('Objectives must be valid JSON.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await patchVP(profile.id, {
+        persona_body: personaDraft,
+        description: descDraft,
+        objectives,
+      });
+      onSaved(updated);
+    } catch (e: unknown) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [personaDraft, descDraft, objectivesDraft, profile.id, onSaved]);
+
+  const onUnpin = useCallback(
+    async (fact: CoreFact) => {
+      try {
+        await unpinCoreFact(profile.id, fact.id);
+        setCoreFactsView((prev) => prev.filter((f) => f.id !== fact.id));
+        const fresh = await getVP(profile.id);
+        onSaved(fresh);
+      } catch (e: unknown) {
+        setError(String(e));
+      }
+    },
+    [profile.id, onSaved],
+  );
+
+  return (
+    <div className="h-full overflow-y-auto p-10 space-y-6">
+      <Section title="Description (hover blurb)">
+        <textarea
+          value={descDraft}
+          onChange={(e) => setDescDraft(e.target.value)}
+          rows={2}
+          className="w-full bg-bg text-text border-2 border-border rounded-none p-3 font-sans text-sm resize-y focus:border-accent focus:outline-none"
+        />
+      </Section>
+
+      <Section title="Persona (markdown)">
+        <textarea
+          value={personaDraft}
+          onChange={(e) => setPersonaDraft(e.target.value)}
+          rows={16}
+          className="w-full bg-bg text-text border-2 border-border rounded-none p-3 font-mono text-xs resize-y focus:border-accent focus:outline-none"
+        />
+      </Section>
+
+      <Section title="Objectives (JSON)">
+        <textarea
+          value={objectivesDraft}
+          onChange={(e) => setObjectivesDraft(e.target.value)}
+          rows={10}
+          className="w-full bg-bg text-text border-2 border-border rounded-none p-3 font-mono text-xs resize-y focus:border-accent focus:outline-none"
+        />
+      </Section>
+
+      <Section title="Core facts">
+        {coreFactsView.length === 0 ? (
+          <p className="text-text-muted text-sm">
+            None yet. Pin from the Memory tab.
+          </p>
+        ) : (
+          <ul className="m-0 p-0 list-none space-y-2">
+            {coreFactsView.map((f) => (
+              <li
+                key={f.id}
+                className="border border-border p-3 flex justify-between items-start gap-3"
+              >
+                <p className="text-sm m-0 flex-1">{f.content}</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void onUnpin(f)}
+                >
+                  unpin
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {error && <p className="text-red-400 text-sm">Error: {error}</p>}
+
+      <div className="flex gap-2 sticky bottom-0 bg-bg pt-3 border-t border-border">
+        <Button
+          variant="accent"
+          size="md"
+          onClick={() => void save()}
+          disabled={!dirty || saving}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+        <span className="text-xs text-text-muted self-center">
+          {dirty ? 'Unsaved changes' : 'Up to date'}
+        </span>
+      </div>
+    </div>
+  );
+}

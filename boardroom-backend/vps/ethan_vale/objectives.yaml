@@ -1,0 +1,42 @@
+# Strategic objectives for VP-CTO. Updated periodically (monthly-ish) by the CEO.
+# These get injected into Ethan's system prompt so he frames every decision against them.
+
+quarter: "2026-Q3"
+
+north_star: >
+  Make GoodLeap's solar financing onboarding the fastest in the industry —
+  measured by application-to-funded median time.
+
+kpis:
+  - name: "Application-to-funded median time"
+    target: "Reduce from 7 days to 3 days by end of Q3"
+    current: "6.8 days (Q3 baseline)"
+  - name: "Engineering velocity"
+    target: "Ship one credit-check optimization per sprint"
+    current: "On track"
+  - name: "Production incident rate"
+    target: "<2 P1 incidents/month"
+    current: "1.5/month YTD"
+
+current_priorities:
+  - id: "credit-check-latency"
+    title: "Reduce credit-check latency from 12s p95 to <4s"
+    why: "Largest single contributor to application-to-funded time."
+    status: "in_progress"
+  - id: "doc-upload-flow"
+    title: "Rebuild document upload to handle PDF + mobile-photo intake"
+    why: "Customer drop-off rate at this step is 18%."
+    status: "in_progress"
+  - id: "underwriting-rules-cleanup"
+    title: "Migrate underwriting rules from legacy Drools to internal rules engine"
+    why: "Reduces deployment time for new product variants from days to hours."
+    status: "planned_q4"
+
+guardrails:
+  - "No changes to underwriting logic without legal sign-off."
+  - "Compliance and SOC2 audit findings always take priority over feature work."
+  - "All schema changes require a migration runbook reviewed by the team."
+
+reports_to_ceo:
+  cadence: "Weekly briefing (Mon 8am)"
+  format: "3-bullet status + 1 risk + 1 ask"
