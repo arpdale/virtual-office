@@ -13,16 +13,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { type VPSummary, listVPs, streamChat } from '../services/boardroom.js';
 import {
-  getCharacterIdForVp,
-  getHueShiftForVp,
-  setVPActive,
-} from '../office/boardroomRoster.js';
+  BOARD_MEETING_COLORS,
+  VP_AVATAR_BG,
+  VP_END_MEETING_BTN_BG,
+  VP_END_MEETING_COLOR,
+  VP_END_MEETING_ICON_FG,
+  VP_SANS_FONT,
+  VP_SCRIM_DARK,
+} from '../constants.js';
 import { adjournBoardMeeting, callBoardMeeting } from '../office/boardMeeting.js';
+import { getHueShiftForVp, setVPActive } from '../office/boardroomRoster.js';
 import type { OfficeState } from '../office/engine/officeState.js';
-import { ConferenceScene } from './ConferenceScene.js';
+import { listVPs, streamChat, type VPSummary } from '../services/boardroom.js';
 import { CharacterPortrait } from './CharacterPortrait.js';
+import { ConferenceScene } from './ConferenceScene.js';
 
 interface Props {
   isOpen: boolean;
@@ -32,23 +37,7 @@ interface Props {
   onClose: () => void;
 }
 
-const C = {
-  shellBg: '#f8f1e3',
-  panelBg: '#ffffff',
-  text: '#2a2a2a',
-  textMuted: '#7a7367',
-  border: '#eadfc9',
-  hairline: '#eee8d8',
-  badgeBg: '#dceedd',
-  badgeText: '#22a06b',
-  accentText: '#7a5a3a',
-  accentBg: '#f3ebd9',
-  cardShadow: '0 2px 12px rgba(60, 40, 10, 0.08)',
-  shadow: '0 4px 24px rgba(60, 40, 10, 0.18)',
-};
-
-const SANS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif';
+const C = BOARD_MEETING_COLORS;
 
 interface MeetingMessage {
   id: string;
@@ -71,6 +60,7 @@ export function BoardMeetingOverlay({
   onClose,
 }: Props) {
   const [allVPs, setAllVPs] = useState<VPSummary[]>([]);
+  const [activeIds, setActiveIds] = useState<string[]>([]);
   const [messages, setMessages] = useState<MeetingMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -86,6 +76,21 @@ export function BoardMeetingOverlay({
       .then(setAllVPs)
       .catch(() => {});
   }, [isOpen]);
+
+  // Seed active participants from the prop when the meeting starts
+  useEffect(() => {
+    if (isOpen) setActiveIds(participantIds);
+  }, [isOpen, participantIds]);
+
+  const addParticipant = useCallback(
+    (vpId: string) => {
+      if (activeIds.includes(vpId)) return;
+      setActiveIds((prev) => [...prev, vpId]);
+      callBoardMeeting(officeState, [vpId]);
+      setVPActive(officeState, vpId, false);
+    },
+    [activeIds, officeState],
+  );
 
   // Start: walk participants to seats, start the timer
   useEffect(() => {
@@ -129,21 +134,25 @@ export function BoardMeetingOverlay({
     if (stickToBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // Resolve participant summaries from ids
+  // Resolve participant summaries from active ids (includes ad-hoc additions)
   const participants = useMemo(() => {
     const byId = new Map(allVPs.map((v) => [v.id, v]));
-    return participantIds
-      .map((id) => byId.get(id))
-      .filter((v): v is VPSummary => !!v);
-  }, [allVPs, participantIds]);
+    return activeIds.map((id) => byId.get(id)).filter((v): v is VPSummary => !!v);
+  }, [allVPs, activeIds]);
+
+  // VPs not yet in the meeting — available for ad-hoc addition
+  const availableToAdd = useMemo(() => {
+    const inMeeting = new Set(activeIds);
+    return allVPs.filter((v) => !inMeeting.has(v.id));
+  }, [allVPs, activeIds]);
 
   const endMeeting = useCallback(() => {
     adjournBoardMeeting(officeState);
-    for (const id of participantIds) {
+    for (const id of activeIds) {
       setVPActive(officeState, id, false);
     }
     onClose();
-  }, [officeState, participantIds, onClose]);
+  }, [officeState, activeIds, onClose]);
 
   // Determine who a message is addressed to.
   // - "@firstname …" or "@First Last …" → just that VP (case-insensitive)
@@ -170,10 +179,7 @@ export function BoardMeetingOverlay({
     setDraft('');
 
     const userMsgId = `you-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, who: 'you', text, ts: new Date() },
-    ]);
+    setMessages((prev) => [...prev, { id: userMsgId, who: 'you', text, ts: new Date() }]);
 
     const addressees = resolveAddressees(text);
     for (const vp of addressees) {
@@ -254,7 +260,7 @@ export function BoardMeetingOverlay({
     <>
       <div
         className="fixed inset-0"
-        style={{ background: 'rgba(20, 14, 6, 0.65)', zIndex: 70 }}
+        style={{ background: VP_SCRIM_DARK, zIndex: 70 }}
         onClick={endMeeting}
       />
       <div
@@ -266,7 +272,7 @@ export function BoardMeetingOverlay({
           boxShadow: C.shadow,
           zIndex: 71,
           color: C.text,
-          fontFamily: SANS,
+          fontFamily: VP_SANS_FONT,
           fontSize: 15,
           lineHeight: 1.5,
           overflow: 'hidden',
@@ -295,15 +301,31 @@ export function BoardMeetingOverlay({
             <div style={{ flex: 1, minWidth: 0, padding: 16 }}>
               <ConferenceScene participants={participants} />
             </div>
-            <ParticipantsPanel participants={participants} />
+            <ParticipantsPanel
+              participants={participants}
+              availableToAdd={availableToAdd}
+              onAdd={addParticipant}
+            />
           </div>
 
           {/* Bottom: group chat */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ padding: '12px 24px 6px', borderBottom: `1px solid ${C.hairline}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                padding: '12px 24px 6px',
+                borderBottom: `1px solid ${C.hairline}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
               <span style={{ fontSize: 14, fontWeight: 600 }}>Meeting Chat</span>
               <span style={{ fontSize: 12, color: C.textMuted }}>
-                Default: address all · Use <code style={{ background: C.accentBg, padding: '1px 6px', borderRadius: 4 }}>@firstname</code> to target one
+                Default: address all · Use{' '}
+                <code style={{ background: C.accentBg, padding: '1px 6px', borderRadius: 4 }}>
+                  @firstname
+                </code>{' '}
+                to target one
               </span>
             </div>
 
@@ -354,7 +376,7 @@ export function BoardMeetingOverlay({
                     outline: 'none',
                     background: 'transparent',
                     color: C.text,
-                    fontFamily: SANS,
+                    fontFamily: VP_SANS_FONT,
                     fontSize: 15,
                     resize: 'none',
                     padding: '6px 0',
@@ -366,8 +388,7 @@ export function BoardMeetingOverlay({
                   onClick={() => void send()}
                   disabled={streaming || !draft.trim() || participants.length === 0}
                   style={{
-                    background:
-                      streaming || !draft.trim() ? C.hairline : C.accentBg,
+                    background: streaming || !draft.trim() ? C.hairline : C.accentBg,
                     border: 'none',
                     borderRadius: 8,
                     width: 40,
@@ -380,9 +401,18 @@ export function BoardMeetingOverlay({
                   }}
                   aria-label="Send"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                 </button>
               </div>
@@ -431,15 +461,24 @@ function Header({
             color: C.accentText,
           }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
         </div>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>Board Meeting</div>
+          <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>Meeting</div>
           <div style={{ fontSize: 13, color: C.textMuted, marginTop: 2 }}>{subject}</div>
         </div>
         <div
@@ -456,7 +495,15 @@ function Header({
             gap: 6,
           }}
         >
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.badgeText, display: 'inline-block' }} />
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: C.badgeText,
+              display: 'inline-block',
+            }}
+          />
           In Progress
         </div>
         <div style={{ fontSize: 13, color: C.textMuted, marginLeft: 8 }}>
@@ -465,7 +512,14 @@ function Header({
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         <div>
-          <div style={{ fontSize: 11, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: C.textMuted,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}
+          >
             Time Elapsed
           </div>
           <div style={{ fontSize: 18, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -475,21 +529,34 @@ function Header({
         <button
           onClick={onEnd}
           style={{
-            background: '#fff',
+            background: VP_END_MEETING_BTN_BG,
             border: `1px solid ${C.border}`,
             borderRadius: 10,
             padding: '10px 16px',
             cursor: 'pointer',
-            fontFamily: SANS,
+            fontFamily: VP_SANS_FONT,
             fontSize: 14,
             fontWeight: 600,
-            color: '#c0392b',
+            color: VP_END_MEETING_COLOR,
             display: 'flex',
             alignItems: 'center',
             gap: 8,
           }}
         >
-          <span style={{ display: 'inline-block', width: 18, height: 18, lineHeight: '18px', textAlign: 'center', background: '#c0392b', color: '#fff', borderRadius: 4 }}>×</span>
+          <span
+            style={{
+              display: 'inline-block',
+              width: 18,
+              height: 18,
+              lineHeight: '18px',
+              textAlign: 'center',
+              background: VP_END_MEETING_COLOR,
+              color: VP_END_MEETING_ICON_FG,
+              borderRadius: 4,
+            }}
+          >
+            ×
+          </span>
           End Meeting
         </button>
       </div>
@@ -498,14 +565,26 @@ function Header({
 }
 
 function formatElapsed(seconds: number): string {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const m = Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, '0');
   const s = (seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
 }
 
 // ── Participants panel (right side of top half) ─────────────
 
-function ParticipantsPanel({ participants }: { participants: VPSummary[] }) {
+function ParticipantsPanel({
+  participants,
+  availableToAdd,
+  onAdd,
+}: {
+  participants: VPSummary[];
+  availableToAdd: VPSummary[];
+  onAdd: (vpId: string) => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+
   return (
     <div
       style={{
@@ -524,10 +603,35 @@ function ParticipantsPanel({ participants }: { participants: VPSummary[] }) {
           marginBottom: 10,
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          justifyContent: 'space-between',
         }}
       >
-        Participants <span style={{ color: C.textMuted, fontWeight: 400 }}>({participants.length})</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Participants{' '}
+          <span style={{ color: C.textMuted, fontWeight: 400 }}>({participants.length})</span>
+        </div>
+        {availableToAdd.length > 0 && (
+          <button
+            onClick={() => setShowAdd((v) => !v)}
+            title="Add attendee"
+            style={{
+              background: showAdd ? C.accentBg : C.panelBg,
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              width: 26,
+              height: 26,
+              cursor: 'pointer',
+              fontSize: 16,
+              lineHeight: '24px',
+              color: C.accentText,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            +
+          </button>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <ParticipantRow name="You" role="CEO" badge="Leading" />
@@ -541,6 +645,89 @@ function ParticipantsPanel({ participants }: { participants: VPSummary[] }) {
           />
         ))}
       </div>
+
+      {/* Ad-hoc add dropdown */}
+      {showAdd && availableToAdd.length > 0 && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: 8,
+            background: C.panelBg,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: C.textMuted,
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}
+          >
+            Add to meeting
+          </div>
+          {availableToAdd.map((vp) => (
+            <button
+              key={vp.id}
+              onClick={() => {
+                onAdd(vp.id);
+                if (availableToAdd.length <= 1) setShowAdd(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '6px 8px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                color: C.text,
+                fontFamily: VP_SANS_FONT,
+                fontSize: 13,
+                textAlign: 'left',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = C.accentBg;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  background: VP_AVATAR_BG,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'center',
+                  border: `1px solid ${C.border}`,
+                }}
+              >
+                <div style={{ width: 20, height: 24, marginBottom: -3 }}>
+                  <CharacterPortrait
+                    palette={vp.palette}
+                    hueShift={getHueShiftForVp(vp.id)}
+                    scale={2}
+                    background="transparent"
+                  />
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{vp.name}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{vp.role}</div>
+              </div>
+              <span style={{ color: C.accentText, fontSize: 16 }}>+</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -573,7 +760,7 @@ function ParticipantRow({
           width: 36,
           height: 36,
           borderRadius: '50%',
-          background: '#d9c8a8',
+          background: VP_AVATAR_BG,
           overflow: 'hidden',
           display: 'flex',
           alignItems: 'flex-end',
@@ -595,10 +782,21 @@ function ParticipantRow({
         )}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div
+          style={{ fontSize: 13, fontWeight: 600, display: 'flex', gap: 6, alignItems: 'center' }}
+        >
           {name}
           {badge && (
-            <span style={{ fontSize: 10, background: C.accentBg, color: C.accentText, padding: '2px 6px', borderRadius: 999, fontWeight: 600 }}>
+            <span
+              style={{
+                fontSize: 10,
+                background: C.accentBg,
+                color: C.accentText,
+                padding: '2px 6px',
+                borderRadius: 999,
+                fontWeight: 600,
+              }}
+            >
               {badge}
             </span>
           )}
@@ -626,9 +824,13 @@ function MeetingBubble({ m }: { m: MeetingMessage }) {
             fontSize: 14,
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.accentText, marginBottom: 4 }}>You</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.accentText, marginBottom: 4 }}>
+            You
+          </div>
           <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.text}</div>
-          <div style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 4 }}>{time}</div>
+          <div style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', marginTop: 4 }}>
+            {time}
+          </div>
         </div>
       </div>
     );
@@ -640,7 +842,7 @@ function MeetingBubble({ m }: { m: MeetingMessage }) {
           width: 32,
           height: 32,
           borderRadius: '50%',
-          background: '#d9c8a8',
+          background: VP_AVATAR_BG,
           overflow: 'hidden',
           display: 'flex',
           alignItems: 'flex-end',
@@ -675,9 +877,7 @@ function MeetingBubble({ m }: { m: MeetingMessage }) {
         <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
           {m.vpName}
           {m.vpRole && (
-            <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 6 }}>
-              {m.vpRole}
-            </span>
+            <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 6 }}>{m.vpRole}</span>
           )}
         </div>
         <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>

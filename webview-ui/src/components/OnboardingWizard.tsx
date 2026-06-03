@@ -11,13 +11,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
-  type OnboardQuestionOut,
-  type TemplateSummary,
-  type VPPreview,
   answerOnboarding,
   commitOnboarding,
   listTemplates,
+  type OnboardQuestionOut,
   startOnboarding,
+  type TemplateSummary,
+  type VPPreview,
 } from '../services/boardroom.js';
 import { Button } from './ui/Button.js';
 
@@ -105,11 +105,7 @@ export function OnboardingWizard({ isOpen, onClose, onCommitted }: Props) {
 
   return (
     <>
-      <div
-        className="fixed inset-0 bg-black/70"
-        style={{ zIndex: 70 }}
-        onClick={closeAndReset}
-      />
+      <div className="fixed inset-0 bg-black/70" style={{ zIndex: 70 }} onClick={closeAndReset} />
       <div
         className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-bg border-2 border-border rounded-none shadow-pixel flex flex-col"
         style={{ zIndex: 71, width: '720px', maxWidth: '95vw', maxHeight: '90vh' }}
@@ -129,9 +125,7 @@ export function OnboardingWizard({ isOpen, onClose, onCommitted }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-10">
-          {error && (
-            <p className="text-red-400 text-sm mb-4">Error: {error}</p>
-          )}
+          {error && <p className="text-red-400 text-sm mb-4">Error: {error}</p>}
 
           {stage === 'template' && (
             <TemplateGallery
@@ -222,12 +216,8 @@ function TemplateGallery({
           onClick={() => onPick(t)}
           className="text-left border-2 border-border bg-active-bg/30 hover:border-accent rounded-none p-4 cursor-pointer"
         >
-          <div className="text-accent-bright text-base mb-1">
-            {t.display_name}
-          </div>
-          <div className="text-xs text-text-muted uppercase mb-2">
-            {t.category}
-          </div>
+          <div className="text-accent-bright text-base mb-1">{t.display_name}</div>
+          <div className="text-xs text-text-muted uppercase mb-2">{t.category}</div>
           <div className="text-sm">{t.description}</div>
         </button>
       ))}
@@ -273,8 +263,8 @@ function PaletteStep({
         ))}
       </div>
       <p className="text-xs text-text-muted mb-6">
-        Each palette = one of the 6 stock character skins (char_0.png …
-        char_5.png). The character will appear with this skin in the office.
+        Each palette = one of the 6 stock character skins (char_0.png … char_5.png). The character
+        will appear with this skin in the office.
       </p>
       <div className="flex gap-2">
         <Button variant="default" size="md" onClick={onBack}>
@@ -324,12 +314,7 @@ function QuestionStep({
         <span className="text-xs text-text-muted">
           Progress: {session.answered + 1}/{session.total}
         </span>
-        <Button
-          variant="accent"
-          size="md"
-          onClick={onSubmit}
-          disabled={!draft.trim()}
-        >
+        <Button variant="accent" size="md" onClick={onSubmit} disabled={!draft.trim()}>
           {session.answered + 1 === session.total ? 'Finish' : 'Next'}
         </Button>
       </div>
@@ -358,29 +343,22 @@ function PreviewStep({
           <span className="text-accent-bright text-xl">{preview.name}</span>
           <span className="text-text-muted text-sm ml-3">{preview.role}</span>
         </div>
-        <p className="text-sm italic text-text-muted mb-4">
-          {preview.description}
-        </p>
+        <p className="text-sm italic text-text-muted mb-4">{preview.description}</p>
         <p className="text-xs text-text-muted">
-          Suggested id:{' '}
-          <code className="text-text">{preview.suggested_id}</code> · Sprite
-          palette {preview.palette}
+          Suggested id: <code className="text-text">{preview.suggested_id}</code> · Sprite palette{' '}
+          {preview.palette}
         </p>
       </div>
 
       <details className="mb-6">
-        <summary className="cursor-pointer text-sm text-accent mb-2">
-          Persona body
-        </summary>
+        <summary className="cursor-pointer text-sm text-accent mb-2">Persona body</summary>
         <pre className="text-xs whitespace-pre-wrap font-mono border border-border p-3">
           {preview.persona_body}
         </pre>
       </details>
 
       <details className="mb-6">
-        <summary className="cursor-pointer text-sm text-accent mb-2">
-          Starter core facts
-        </summary>
+        <summary className="cursor-pointer text-sm text-accent mb-2">Starter core facts</summary>
         <ul className="m-0 pl-8 list-disc">
           {preview.core_facts.map((f, i) => (
             <li key={i} className="text-sm mb-2">
@@ -404,21 +382,12 @@ function PreviewStep({
 
 // ── Done step ───────────────────────────────────────────────
 
-function DoneStep({
-  preview,
-  onClose,
-}: {
-  preview: VPPreview;
-  onClose: () => void;
-}) {
+function DoneStep({ preview, onClose }: { preview: VPPreview; onClose: () => void }) {
   return (
     <div className="text-center py-10">
-      <p className="text-accent-bright text-xl mb-2">
-        {preview.name} has joined the office.
-      </p>
+      <p className="text-accent-bright text-xl mb-2">{preview.name} has joined the office.</p>
       <p className="text-text-muted text-sm mb-8">
-        Look for the new character — sprite palette {preview.palette}. Click to
-        chat.
+        Look for the new character — sprite palette {preview.palette}. Click to chat.
       </p>
       <Button variant="accent" size="lg" onClick={onClose}>
         Close

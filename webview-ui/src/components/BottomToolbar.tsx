@@ -140,11 +140,7 @@ export function BottomToolbar({
         </Button>
       )}
       {onAddVP && (
-        <Button
-          variant="accent"
-          onClick={onAddVP}
-          title="Onboard a new VP into the boardroom"
-        >
+        <Button variant="accent" onClick={onAddVP} title="Onboard a new VP into the boardroom">
           + New VP
         </Button>
       )}
@@ -152,9 +148,9 @@ export function BottomToolbar({
         <Button
           variant={meetingInProgress ? 'active' : 'default'}
           onClick={meetingInProgress ? onAdjournMeeting : onBoardMeeting}
-          title={meetingInProgress ? 'Adjourn the board meeting' : 'Call a board meeting (all VPs walk over)'}
+          title={meetingInProgress ? 'Adjourn the meeting' : 'Call a meeting (VPs walk over)'}
         >
-          {meetingInProgress ? 'Adjourn' : 'Board Meeting'}
+          {meetingInProgress ? 'Adjourn' : 'Meeting'}
         </Button>
       )}
       <Button

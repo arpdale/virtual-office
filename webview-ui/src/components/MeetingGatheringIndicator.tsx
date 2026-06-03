@@ -4,14 +4,15 @@
  * shows how many have arrived + a Skip button to jump straight to chat.
  */
 
+import { VP_COLORS, VP_SANS_FONT } from '../constants.js';
+
 interface Props {
   arrived: number;
   total: number;
   onSkip: () => void;
 }
 
-const SANS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif';
+const C = VP_COLORS;
 
 export function MeetingGatheringIndicator({ arrived, total, onSkip }: Props) {
   const pct = total === 0 ? 0 : Math.min(100, Math.round((arrived / total) * 100));
@@ -24,16 +25,16 @@ export function MeetingGatheringIndicator({ arrived, total, onSkip }: Props) {
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 75,
-        background: '#f8f1e3',
-        border: '1px solid #eadfc9',
-        boxShadow: '0 4px 24px rgba(60, 40, 10, 0.25)',
+        background: C.shellBg,
+        border: `1px solid ${C.border}`,
+        boxShadow: C.shadow,
         borderRadius: 12,
         padding: '12px 18px 12px 18px',
         display: 'flex',
         alignItems: 'center',
         gap: 16,
-        fontFamily: SANS,
-        color: '#2a2a2a',
+        fontFamily: VP_SANS_FONT,
+        color: C.text,
         minWidth: 320,
       }}
     >
@@ -42,8 +43,8 @@ export function MeetingGatheringIndicator({ arrived, total, onSkip }: Props) {
           width: 28,
           height: 28,
           borderRadius: '50%',
-          background: '#f3ebd9',
-          color: '#7a5a3a',
+          background: C.accentBg,
+          color: C.accentText,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -57,14 +58,14 @@ export function MeetingGatheringIndicator({ arrived, total, onSkip }: Props) {
 
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-          Gathering the board…
+          Gathering the attendees…
         </div>
         <div
           style={{
             position: 'relative',
             height: 4,
             borderRadius: 2,
-            background: '#eadfc9',
+            background: C.border,
             overflow: 'hidden',
           }}
         >
@@ -75,12 +76,12 @@ export function MeetingGatheringIndicator({ arrived, total, onSkip }: Props) {
               top: 0,
               bottom: 0,
               width: `${pct}%`,
-              background: '#7a5a3a',
+              background: C.accentText,
               transition: 'width 0.3s ease',
             }}
           />
         </div>
-        <div style={{ fontSize: 11, color: '#7a7367', marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
           {arrived} of {total} seated
         </div>
       </div>
@@ -88,15 +89,15 @@ export function MeetingGatheringIndicator({ arrived, total, onSkip }: Props) {
       <button
         onClick={onSkip}
         style={{
-          background: '#ffffff',
-          border: '1px solid #eadfc9',
+          background: C.panelBg,
+          border: `1px solid ${C.border}`,
           borderRadius: 8,
           padding: '8px 14px',
           fontSize: 13,
           fontWeight: 600,
           cursor: 'pointer',
-          color: '#2a2a2a',
-          fontFamily: SANS,
+          color: C.text,
+          fontFamily: VP_SANS_FONT,
         }}
       >
         Skip →

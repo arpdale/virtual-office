@@ -5,9 +5,10 @@
 
 import { useEffect, useRef } from 'react';
 
-import { Direction as Dir } from '../office/types.js';
+import { PORTRAIT_DEFAULT_BG, PORTRAIT_RUG_COLOR, PORTRAIT_RUG_SHADOW } from '../constants.js';
 import { getCharacterSprites } from '../office/sprites/spriteData.js';
-import type { SpriteData } from '../office/sprites/spriteData.js';
+import type { SpriteData } from '../office/types.js';
+import { Direction as Dir } from '../office/types.js';
 
 interface Props {
   palette: number;
@@ -21,11 +22,7 @@ interface Props {
 const SPRITE_W = 16;
 const SPRITE_H = 24;
 
-function drawSprite(
-  ctx: CanvasRenderingContext2D,
-  sprite: SpriteData,
-  scale: number,
-) {
+function drawSprite(ctx: CanvasRenderingContext2D, sprite: SpriteData, scale: number) {
   for (let y = 0; y < sprite.length; y++) {
     const row = sprite[y];
     for (let x = 0; x < row.length; x++) {
@@ -37,12 +34,7 @@ function drawSprite(
   }
 }
 
-export function CharacterPortrait({
-  palette,
-  hueShift = 0,
-  scale = 14,
-  background,
-}: Props) {
+export function CharacterPortrait({ palette, hueShift = 0, scale = 14, background }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -66,9 +58,7 @@ export function CharacterPortrait({
     <div
       className="relative w-full h-full overflow-hidden"
       style={{
-        background:
-          background ??
-          'linear-gradient(to bottom, #d9c8a8 0%, #d9c8a8 60%, #8b6f47 60%, #8b6f47 100%)',
+        background: background ?? PORTRAIT_DEFAULT_BG,
       }}
     >
       {/* Subtle rug rectangle behind the character */}
@@ -79,9 +69,9 @@ export function CharacterPortrait({
           right: '15%',
           bottom: '5%',
           height: '15%',
-          background: '#3a2e1f',
+          background: PORTRAIT_RUG_COLOR,
           borderRadius: '4px',
-          boxShadow: 'inset 0 0 0 4px #2a1f12',
+          boxShadow: PORTRAIT_RUG_SHADOW,
         }}
       />
       <canvas

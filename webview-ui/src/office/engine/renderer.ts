@@ -613,7 +613,8 @@ export function renderFrame(
   // Background image (lowest z-order). When set, suppresses floor/wall sprite passes
   // so the image is the visible ground. Walls still collide; furniture still renders.
   // imageSmoothingEnabled = false keeps the pixel art crisp at integer-zoom upscales.
-  const hasBackgroundImage = !!backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0;
+  const hasBackgroundImage =
+    !!backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0;
   if (hasBackgroundImage) {
     const prevSmoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
@@ -657,14 +658,16 @@ export function renderFrame(
   // When a background image is set, wall sprites are suppressed — the image already
   // shows the walls; we only keep them in the tileMap for collision.
   const wallInstances =
-    !hasBackgroundImage && hasWallSprites() ? getWallInstances(tileMap, tileColors, layoutCols) : [];
+    !hasBackgroundImage && hasWallSprites()
+      ? getWallInstances(tileMap, tileColors, layoutCols)
+      : [];
   // Filter invisible (marker) furniture out of the play-mode render pass; show in edit mode.
   // Look up invisibility from the catalog by type — saved layouts predating the catalog
   // flag don't carry `invisible: true` on the row itself.
   const isEditMode = !!editor;
   const visibleFurniture = isEditMode
     ? furniture
-    : furniture.filter((f) => !f.invisible && !getCatalogEntry(f.type)?.invisible);
+    : furniture.filter((f) => !f.invisible && !(f.type && getCatalogEntry(f.type)?.invisible));
   const allFurniture =
     wallInstances.length > 0 ? [...wallInstances, ...visibleFurniture] : visibleFurniture;
 

@@ -1,36 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toMajorMinor } from './changelogData.js';
+import { BoardMeetingOverlay } from './components/BoardMeetingOverlay.js';
 import { BottomToolbar } from './components/BottomToolbar.js';
 import { ChangelogModal } from './components/ChangelogModal.js';
 import { DebugView } from './components/DebugView.js';
 import { EditActionBar } from './components/EditActionBar.js';
+import { MeetingGatheringIndicator } from './components/MeetingGatheringIndicator.js';
+import { MeetingSelector } from './components/MeetingSelector.js';
 import { MigrationNotice } from './components/MigrationNotice.js';
+import { OnboardingWizard } from './components/OnboardingWizard.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { Tooltip } from './components/Tooltip.js';
 import { Modal } from './components/ui/Modal.js';
 import { VersionIndicator } from './components/VersionIndicator.js';
+import { VPOverlay } from './components/VPOverlay.js';
 import { ZoomControls } from './components/ZoomControls.js';
 import { useEditorActions } from './hooks/useEditorActions.js';
 import { useEditorKeyboard } from './hooks/useEditorKeyboard.js';
 import { useExtensionMessages } from './hooks/useExtensionMessages.js';
-import { BoardMeetingOverlay } from './components/BoardMeetingOverlay.js';
-import { MeetingGatheringIndicator } from './components/MeetingGatheringIndicator.js';
-import { MeetingSelector } from './components/MeetingSelector.js';
-import { OnboardingWizard } from './components/OnboardingWizard.js';
-import { VPOverlay } from './components/VPOverlay.js';
 import { callBoardMeeting } from './office/boardMeeting.js';
-import { getCharacterIdForVp, getVpIdForCharacter, loadBoardroomVPs, spawnBoardroomVP, setVPActive } from './office/boardroomRoster.js';
-import { CharacterState } from './office/types.js';
-import { getVP } from './services/boardroom.js';
+import {
+  getCharacterIdForVp,
+  getVpIdForCharacter,
+  loadBoardroomVPs,
+  setVPActive,
+  spawnBoardroomVP,
+} from './office/boardroomRoster.js';
 import { OfficeCanvas } from './office/components/OfficeCanvas.js';
 import { ToolOverlay } from './office/components/ToolOverlay.js';
 import { EditorState } from './office/editor/editorState.js';
 import { EditorToolbar } from './office/editor/EditorToolbar.js';
 import { OfficeState } from './office/engine/officeState.js';
 import { isRotatable } from './office/layout/furnitureCatalog.js';
+import { CharacterState } from './office/types.js';
 import { EditTool } from './office/types.js';
 import { isBrowserRuntime } from './runtime.js';
+import { getVP } from './services/boardroom.js';
 import { transport } from './transport/index.js';
 
 // Game state lives outside React — updated imperatively by message handlers
@@ -244,25 +250,21 @@ function App() {
     }
   }, [meetingState, officeState]);
 
-  const handleVPCommitted = useCallback(
-    async (committed: { suggested_id: string }) => {
-      // After wizard commits, refetch the new VP and spawn its character.
-      try {
-        const vp = await getVP(committed.suggested_id);
-        spawnBoardroomVP(getOfficeState(), {
-          id: vp.id,
-          name: vp.name,
-          role: vp.role,
-          description: vp.description,
-          palette: vp.palette,
-        });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[boardroom] failed to spawn new VP:', err);
-      }
-    },
-    [],
-  );
+  const handleVPCommitted = useCallback(async (committed: { suggested_id: string }) => {
+    // After wizard commits, refetch the new VP and spawn its character.
+    try {
+      const vp = await getVP(committed.suggested_id);
+      spawnBoardroomVP(getOfficeState(), {
+        id: vp.id,
+        name: vp.name,
+        role: vp.role,
+        description: vp.description,
+        palette: vp.palette,
+      });
+    } catch (err) {
+      console.error('[boardroom] failed to spawn new VP:', err);
+    }
+  }, []);
 
   const handleClick = useCallback((agentId: number) => {
     // Backend-VP characters: open the boardroom overlay
@@ -289,10 +291,12 @@ function App() {
       try {
         const vps = await loadBoardroomVPs(officeState);
         if (cancelled) return;
-        // eslint-disable-next-line no-console
-        console.log(`[boardroom] spawned ${vps.length} VPs:`, vps.map((v) => v.name));
+
+        console.log(
+          `[boardroom] spawned ${vps.length} VPs:`,
+          vps.map((v) => v.name),
+        );
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[boardroom] failed to load VPs:', err);
       }
     })();

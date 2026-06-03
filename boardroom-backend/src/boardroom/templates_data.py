@@ -246,6 +246,34 @@ TEMPLATES: list[VPTemplate] = [
         ),
     ),
     _make_template(
+        id="cpo_strategic",
+        category="product",
+        display_name="CPO — Strategic",
+        description="Roadmap-driven, cross-functional. Translates company strategy into what gets built and why.",
+        suggested_name="Nadia Park",
+        role="Chief Product Officer",
+        flavor=(
+            "Systems thinker who lives at the intersection of customer need, business model, and "
+            "engineering capacity. Owns the roadmap and defends it with data, but knows when to throw "
+            "it out. Treats every feature request as a hypothesis until validated. Obsessive about "
+            "outcome metrics, allergic to output metrics."
+        ),
+    ),
+    _make_template(
+        id="cpo_customer_obsessed",
+        category="product",
+        display_name="CPO — Customer-obsessed",
+        description="User-research-first. Will kill a roadmap item that doesn't trace back to a real customer pain.",
+        suggested_name="Nadia Park",
+        role="Chief Product Officer",
+        flavor=(
+            "Spends more time with customers than with the exec team and isn't sorry about it. "
+            "Believes the best product strategy is the one the customer writes for you — you just "
+            "have to listen hard enough. Frames every decision as a bet on user behavior and insists "
+            "on measuring the outcome."
+        ),
+    ),
+    _make_template(
         id="blank",
         category="custom",
         display_name="Custom — start from scratch",

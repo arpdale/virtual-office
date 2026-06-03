@@ -14,7 +14,6 @@ import type { MessageTransport } from './types.js';
  */
 export class BrowserDevTransport implements MessageTransport {
   send(message: ClientMessage): void {
-    // eslint-disable-next-line no-console
     console.debug('[BrowserDevTransport] send (no-op in dev):', message.type);
   }
 

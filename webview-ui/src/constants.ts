@@ -162,3 +162,100 @@ export const FUEL_COLOR_CRITICAL = '#ff2222';
 export const FUEL_GAUGE_BG = '#222';
 export const TEAM_LEAD_COLOR = '#ffd700';
 export const TEAM_ROLE_COLOR = '#66aaff';
+
+// ── VP Overlay / Boardroom UI ──────────────────────────────
+// Shared cream-themed color palette used by VP overlays, board meeting,
+// meeting selector, and gathering indicator. Exempt from no-inline-colors.
+
+/** Sans-serif font stack for VP overlays (chat-legible, not pixel-art) */
+export const VP_SANS_FONT =
+  '"FS Pixel Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif';
+
+/** Base cream-themed color palette shared across VP overlay components */
+export const VP_COLORS = {
+  shellBg: '#f8f1e3',
+  panelBg: '#ffffff',
+  text: '#2a2a2a',
+  textMuted: '#7a7367',
+  border: '#eadfc9',
+  hairline: '#eee8d8',
+  accentBg: '#f3ebd9',
+  accentText: '#7a5a3a',
+  shadow: '0 4px 24px rgba(60, 40, 10, 0.18)',
+  cardShadow: '0 2px 12px rgba(60, 40, 10, 0.08)',
+};
+
+/** Extended color palette for the VPOverlay (1:1 chat panel) */
+export const VP_OVERLAY_COLORS = {
+  ...VP_COLORS,
+  accent: '#d97847',
+  online: '#22a06b',
+  userBubble: '#f3ebd9',
+  vpBubble: '#ffffff',
+  vpBubbleBorder: '#eadfc9',
+  roleBadgeBg: '#f3ebd9',
+  roleBadgeText: '#7a5a3a',
+  buttonBg: '#fefaf2',
+  buttonHover: '#f3ebd9',
+};
+
+/** Extended color palette for the BoardMeetingOverlay (group meeting) */
+export const BOARD_MEETING_COLORS = {
+  ...VP_COLORS,
+  badgeBg: '#dceedd',
+  badgeText: '#22a06b',
+};
+
+/** Avatar circle background used in VP portraits and chat bubbles */
+export const VP_AVATAR_BG = '#d9c8a8';
+
+/** Scrim backdrop for VP overlay modals */
+export const VP_SCRIM = 'rgba(20, 14, 6, 0.55)';
+export const VP_SCRIM_DARK = 'rgba(20, 14, 6, 0.65)';
+export const VP_SCRIM_MEETING = 'rgba(20, 14, 6, 0.6)';
+
+/** Error text color used across VP overlay components */
+export const VP_ERROR_COLOR = '#c0392b';
+
+/** "In Progress" task accent */
+export const VP_TASK_IN_PROGRESS_COLOR = '#f4a52b';
+
+/** End meeting button colors */
+export const VP_END_MEETING_COLOR = '#c0392b';
+export const VP_END_MEETING_BTN_BG = '#fff';
+export const VP_END_MEETING_ICON_FG = '#fff';
+
+// ── Character Portrait ─────────────────────────────────────
+export const PORTRAIT_DEFAULT_BG =
+  'linear-gradient(to bottom, #d9c8a8 0%, #d9c8a8 60%, #8b6f47 60%, #8b6f47 100%)';
+export const PORTRAIT_RUG_COLOR = '#3a2e1f';
+export const PORTRAIT_RUG_SHADOW = 'inset 0 0 0 4px #2a1f12';
+
+// ── Conference Scene (canvas drawing colors) ───────────────
+export const CONF_WALL_DARK = '#3a2e1f';
+export const CONF_WALL_LIGHT = '#5a4631';
+export const CONF_BOOKSHELF_COLOR = '#2a1e10';
+export const CONF_WINDOW_BG = '#1a2a3e';
+export const CONF_CITY_SILHOUETTE = '#0a1420';
+export const CONF_WINDOW_GLOW = 'rgba(255, 220, 160, 0.06)';
+export const CONF_SCREEN_BG = '#f5efe2';
+export const CONF_SCREEN_TITLE = '#7a5a3a';
+export const CONF_SCREEN_SUBTITLE = '#5a4631';
+export const CONF_FLOOR_TOP = '#6b4f33';
+export const CONF_FLOOR_BOTTOM = '#4a3520';
+export const CONF_PLANK_LINE = 'rgba(0, 0, 0, 0.15)';
+export const CONF_TABLE_TOP = '#6e4f31';
+export const CONF_TABLE_BOTTOM = '#3a2515';
+export const CONF_TABLE_HIGHLIGHT = 'rgba(255, 220, 160, 0.15)';
+export const CONF_NO_PARTICIPANTS = '#bba07a';
+export const CONF_CHAIR_COLOR = '#2a1e10';
+export const CONF_PLACEHOLDER_COLOR = '#d9c8a8';
+export const CONF_CONTAINER_BG = '#3a2e1f';
+export const CONF_CONTAINER_SHADOW = 'inset 0 0 0 1px rgba(0, 0, 0, 0.1)';
+export const CONF_LABEL_BG = '#ffffff';
+export const CONF_LABEL_BORDER = '#eadfc9';
+export const CONF_LABEL_SHADOW = '0 2px 6px rgba(0, 0, 0, 0.2)';
+export const CONF_LABEL_TEXT = '#2a2a2a';
+export const CONF_LABEL_ROLE_COLOR = '#7a7367';
+export const CONF_SHELF_LINE = 'rgba(0, 0, 0, 0.3)';
+export const CONF_BOOK_COLORS = ['#5a3a25', '#8b6b3a', '#c08a4e', '#6d4520'];

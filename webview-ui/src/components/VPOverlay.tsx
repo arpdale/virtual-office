@@ -15,22 +15,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  VP_AVATAR_BG,
+  VP_ERROR_COLOR,
+  VP_OVERLAY_COLORS,
+  VP_SANS_FONT,
+  VP_SCRIM,
+  VP_TASK_IN_PROGRESS_COLOR,
+} from '../constants.js';
+import { getCharacterIdForVp, getHueShiftForVp, setVPActive } from '../office/boardroomRoster.js';
+import type { OfficeState } from '../office/engine/officeState.js';
+import { CharacterState } from '../office/types.js';
+import {
   type CoreFact,
   type DirectiveRow,
-  type MemoryRow,
-  type MemoryType,
-  type VPProfile,
   getVP,
   getVPHistory,
   getVPMemories,
+  type MemoryRow,
+  type MemoryType,
   patchVP,
   pinCoreFact,
   streamChat,
   unpinCoreFact,
+  type VPProfile,
 } from '../services/boardroom.js';
-import type { OfficeState } from '../office/engine/officeState.js';
-import { getCharacterIdForVp, getHueShiftForVp, setVPActive } from '../office/boardroomRoster.js';
-import { CharacterState } from '../office/types.js';
 import { CharacterPortrait } from './CharacterPortrait.js';
 
 type TabId = 'chat' | 'tasks' | 'activity' | 'profile';
@@ -47,42 +55,9 @@ interface Props {
   onShow?: () => void;
 }
 
-// ── Color palette ───────────────────────────────────────────
-// Locked-in colors that match the mockup. Not driven by the dark theme.
-const C = {
-  shellBg: '#f8f1e3',       // outer cream
-  panelBg: '#ffffff',       // inner card bg (left rail panel + about card)
-  text: '#2a2a2a',
-  textMuted: '#7a7367',
-  border: '#eadfc9',
-  hairline: '#eee8d8',
-  accent: '#d97847',        // small accents
-  online: '#22a06b',
-  userBubble: '#f3ebd9',    // tan/cream filled (user messages)
-  vpBubble: '#ffffff',      // white card (VP messages)
-  vpBubbleBorder: '#eadfc9',
-  roleBadgeBg: '#f3ebd9',
-  roleBadgeText: '#7a5a3a',
-  buttonBg: '#fefaf2',
-  buttonHover: '#f3ebd9',
-  shadow: '0 4px 24px rgba(60, 40, 10, 0.18)',
-  cardShadow: '0 2px 12px rgba(60, 40, 10, 0.08)',
-};
+const C = VP_OVERLAY_COLORS;
 
-// Sans-serif stack so the overlay is readable. The app-wide default is a
-// pixel-art font (FS Pixel Sans) which is great for tooltips but terrible
-// for paragraphs of chat. We override it on the overlay only.
-const SANS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif';
-
-export function VPOverlay({
-  vpId,
-  officeState,
-  onClose,
-  visible = true,
-  onHide,
-  onShow,
-}: Props) {
+export function VPOverlay({ vpId, officeState, onClose, visible = true, onHide, onShow }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('chat');
   const [profile, setProfile] = useState<VPProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +91,7 @@ export function VPOverlay({
       <div
         className="fixed inset-0"
         style={{
-          background: 'rgba(20, 14, 6, 0.55)',
+          background: VP_SCRIM,
           zIndex: 60,
           opacity: visible ? 1 : 0,
           pointerEvents: visible ? 'auto' : 'none',
@@ -134,7 +109,7 @@ export function VPOverlay({
           zIndex: 61,
           color: C.text,
           overflow: 'hidden',
-          fontFamily: SANS,
+          fontFamily: VP_SANS_FONT,
           // Slightly larger base + relaxed line-height for chat legibility
           fontSize: 15,
           lineHeight: 1.5,
@@ -177,19 +152,10 @@ export function VPOverlay({
 
         {/* Center column */}
         <div className="flex-1 flex flex-col" style={{ minWidth: 0 }}>
-          {error && (
-            <div style={{ padding: 24, color: '#c0392b' }}>Error: {error}</div>
-          )}
-          {!profile && !error && (
-            <div style={{ padding: 24, color: C.textMuted }}>Loading…</div>
-          )}
+          {error && <div style={{ padding: 24, color: VP_ERROR_COLOR }}>Error: {error}</div>}
+          {!profile && !error && <div style={{ padding: 24, color: C.textMuted }}>Loading…</div>}
           {profile && activeTab === 'chat' && (
-            <ChatTab
-              vp={profile}
-              officeState={officeState}
-              onHide={onHide}
-              onShow={onShow}
-            />
+            <ChatTab vp={profile} officeState={officeState} onHide={onHide} onShow={onShow} />
           )}
           {profile && activeTab === 'tasks' && <TasksTab vp={profile} />}
           {profile && activeTab === 'activity' && <ActivityTab vp={profile} />}
@@ -199,12 +165,7 @@ export function VPOverlay({
         </div>
 
         {/* Right column — portrait + about */}
-        {profile && (
-          <RightColumn
-            profile={profile}
-            onViewTasks={() => setActiveTab('tasks')}
-          />
-        )}
+        {profile && <RightColumn profile={profile} onViewTasks={() => setActiveTab('tasks')} />}
       </div>
     </>
   );
@@ -212,13 +173,7 @@ export function VPOverlay({
 
 // ── Left rail ───────────────────────────────────────────────
 
-function LeftRail({
-  active,
-  onChange,
-}: {
-  active: TabId;
-  onChange: (t: TabId) => void;
-}) {
+function LeftRail({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   const items: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'chat', label: 'Chat', icon: <IconChat /> },
     { id: 'tasks', label: 'Tasks', icon: <IconTasks /> },
@@ -268,13 +223,7 @@ function LeftRail({
 
 // ── Right column: portrait + about ──────────────────────────
 
-function RightColumn({
-  profile,
-  onViewTasks,
-}: {
-  profile: VPProfile;
-  onViewTasks: () => void;
-}) {
+function RightColumn({ profile, onViewTasks }: { profile: VPProfile; onViewTasks: () => void }) {
   // Pull a Location / Reports to / Focus from objectives if present
   const reportsTo = stringField(profile.objectives, 'reports_to');
   const focus = stringField(profile.objectives, 'focus') ?? profile.role;
@@ -299,7 +248,7 @@ function RightColumn({
           flex: '1 1 60%',
           borderRadius: 12,
           overflow: 'hidden',
-          background: '#d9c8a8',
+          background: VP_AVATAR_BG,
           boxShadow: C.cardShadow,
           minHeight: 280,
         }}
@@ -324,7 +273,9 @@ function RightColumn({
         <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>
           About {firstName(profile.name)}
         </div>
-        <p style={{ margin: 0, marginBottom: 14, color: C.textMuted, fontSize: 14, lineHeight: 1.5 }}>
+        <p
+          style={{ margin: 0, marginBottom: 14, color: C.textMuted, fontSize: 14, lineHeight: 1.5 }}
+        >
           {profile.description || `${profile.name} is the ${profile.role}.`}
         </p>
         <div style={{ height: 1, background: C.hairline, marginBottom: 14 }} />
@@ -350,7 +301,7 @@ function RightColumn({
           justifyContent: 'space-between',
           alignItems: 'center',
           boxShadow: C.cardShadow,
-          fontFamily: 'inherit',
+          fontFamily: VP_SANS_FONT,
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -362,15 +313,7 @@ function RightColumn({
   );
 }
 
-function AboutRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function AboutRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div
       style={{
@@ -592,7 +535,16 @@ function ChatTab({
         >
           {vp.description}
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.online, fontSize: 14, fontWeight: 500 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: C.online,
+            fontSize: 14,
+            fontWeight: 500,
+          }}
+        >
           <span
             style={{
               width: 8,
@@ -608,23 +560,25 @@ function ChatTab({
 
       {/* Hairline + Today divider */}
       <div style={{ borderTop: `1px solid ${C.hairline}`, margin: '0 32px' }} />
-      <div style={{ textAlign: 'center', color: C.textMuted, fontSize: 12, padding: '12px 0 4px 0' }}>
+      <div
+        style={{ textAlign: 'center', color: C.textMuted, fontSize: 12, padding: '12px 0 4px 0' }}
+      >
         Today
       </div>
 
       {/* Messages */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 32px 12px' }}>
         {messages.length === 0 && (
-          <p style={{ color: C.textMuted, fontStyle: 'italic', textAlign: 'center', marginTop: 32 }}>
+          <p
+            style={{ color: C.textMuted, fontStyle: 'italic', textAlign: 'center', marginTop: 32 }}
+          >
             Ask {firstName(vp.name)} something to get started.
           </p>
         )}
         {messages.map((m, i) => (
           <MessageBubble key={i} m={m} vp={vp} />
         ))}
-        {error && (
-          <p style={{ color: '#c0392b', fontSize: 13 }}>Error: {error}</p>
-        )}
+        {error && <p style={{ color: VP_ERROR_COLOR, fontSize: 13 }}>Error: {error}</p>}
       </div>
 
       {/* Input */}
@@ -659,7 +613,7 @@ function ChatTab({
               outline: 'none',
               background: 'transparent',
               color: C.text,
-              fontFamily: 'inherit',
+              fontFamily: VP_SANS_FONT,
               fontSize: 15,
               resize: 'none',
               padding: '6px 0',
@@ -750,7 +704,7 @@ function AvatarBubble({ palette, hueShift = 0 }: { palette: number; hueShift?: n
         width: 36,
         height: 36,
         borderRadius: '50%',
-        background: '#d9c8a8',
+        background: VP_AVATAR_BG,
         flexShrink: 0,
         overflow: 'hidden',
         display: 'flex',
@@ -800,7 +754,7 @@ function TasksTab({ vp }: { vp: VPProfile }) {
     };
   }, [vp.id]);
 
-  if (error) return <div style={{ padding: 24, color: '#c0392b' }}>Error: {error}</div>;
+  if (error) return <div style={{ padding: 24, color: VP_ERROR_COLOR }}>Error: {error}</div>;
   if (!rows) return <div style={{ padding: 24, color: C.textMuted }}>Loading…</div>;
 
   // Bucket: "in progress" = directives that have no response stored yet
@@ -811,11 +765,10 @@ function TasksTab({ vp }: { vp: VPProfile }) {
 
   return (
     <div style={{ padding: 32, height: '100%', overflowY: 'auto' }}>
-      <h2 style={{ marginTop: 0, fontSize: 22, fontWeight: 600 }}>
-        {firstName(vp.name)}'s Tasks
-      </h2>
+      <h2 style={{ marginTop: 0, fontSize: 22, fontWeight: 600 }}>{firstName(vp.name)}'s Tasks</h2>
       <p style={{ color: C.textMuted, marginTop: 0, marginBottom: 24, fontSize: 14 }}>
-        Anything you ask {firstName(vp.name)} in chat becomes a task. Click any completed task to see the work.
+        Anything you ask {firstName(vp.name)} in chat becomes a task. Click any completed task to
+        see the work.
       </p>
 
       {rows.length === 0 && (
@@ -836,7 +789,7 @@ function TasksTab({ vp }: { vp: VPProfile }) {
       {inProgress.length > 0 && (
         <TaskColumn
           label="In Progress"
-          accent="#f4a52b"
+          accent={VP_TASK_IN_PROGRESS_COLOR}
           tasks={inProgress}
           expandedId={expandedId}
           onToggle={setExpandedId}
@@ -887,7 +840,15 @@ function TaskColumn({
             display: 'inline-block',
           }}
         />
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: C.textMuted,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
           {label}
         </span>
         <span style={{ fontSize: 13, color: C.textMuted }}>· {tasks.length}</span>
@@ -940,9 +901,7 @@ function TaskCard({
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
             {truncate(task.directive, 120)}
           </div>
-          <div style={{ fontSize: 12, color: C.textMuted }}>
-            {ts.toLocaleString()}
-          </div>
+          <div style={{ fontSize: 12, color: C.textMuted }}>{ts.toLocaleString()}</div>
         </div>
         <span style={{ color: C.textMuted, fontSize: 18 }}>{expanded ? '−' : '+'}</span>
       </div>
@@ -954,7 +913,16 @@ function TaskCard({
             borderTop: `1px solid ${C.hairline}`,
           }}
         >
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: C.textMuted,
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
             The Work
           </div>
           <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
@@ -991,7 +959,7 @@ function ActivityTab({ vp }: { vp: VPProfile }) {
     };
   }, [vp.id]);
 
-  if (error) return <div style={{ padding: 24, color: '#c0392b' }}>Error: {error}</div>;
+  if (error) return <div style={{ padding: 24, color: VP_ERROR_COLOR }}>Error: {error}</div>;
   if (!rows) return <div style={{ padding: 24, color: C.textMuted }}>Loading…</div>;
   if (rows.length === 0)
     return (
@@ -1026,7 +994,9 @@ function ActivityTab({ vp }: { vp: VPProfile }) {
             <div style={{ fontWeight: 600, fontSize: 13, color: C.roleBadgeText, marginBottom: 4 }}>
               You said
             </div>
-            <p style={{ margin: '0 0 10px', fontSize: 14, whiteSpace: 'pre-wrap' }}>{d.directive}</p>
+            <p style={{ margin: '0 0 10px', fontSize: 14, whiteSpace: 'pre-wrap' }}>
+              {d.directive}
+            </p>
             <div style={{ fontWeight: 600, fontSize: 13, color: C.online, marginBottom: 4 }}>
               {vp.name.split(' ')[0]} replied
             </div>
@@ -1042,13 +1012,7 @@ function ActivityTab({ vp }: { vp: VPProfile }) {
 
 const MEMORY_TYPES: MemoryType[] = ['preference', 'fact', 'relationship', 'pattern'];
 
-function ProfileTab({
-  profile,
-  onSaved,
-}: {
-  profile: VPProfile;
-  onSaved: (p: VPProfile) => void;
-}) {
+function ProfileTab({ profile, onSaved }: { profile: VPProfile; onSaved: (p: VPProfile) => void }) {
   const [personaDraft, setPersonaDraft] = useState(profile.persona_body);
   const [descDraft, setDescDraft] = useState(profile.description);
   const [objectivesDraft, setObjectivesDraft] = useState(
@@ -1166,7 +1130,7 @@ function ProfileTab({
           value={personaDraft}
           onChange={(e) => setPersonaDraft(e.target.value)}
           rows={12}
-          style={{ ...inputStyle(), fontFamily: 'monospace', fontSize: 12 }}
+          style={{ ...inputStyle(), fontFamily: '"FS Pixel Sans", monospace', fontSize: 12 }}
         />
       </FieldGroup>
 
@@ -1175,7 +1139,7 @@ function ProfileTab({
           value={objectivesDraft}
           onChange={(e) => setObjectivesDraft(e.target.value)}
           rows={8}
-          style={{ ...inputStyle(), fontFamily: 'monospace', fontSize: 12 }}
+          style={{ ...inputStyle(), fontFamily: '"FS Pixel Sans", monospace', fontSize: 12 }}
         />
       </FieldGroup>
 
@@ -1252,7 +1216,7 @@ function ProfileTab({
         })}
       </FieldGroup>
 
-      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>Error: {error}</p>}
+      {error && <p style={{ color: VP_ERROR_COLOR, fontSize: 13 }}>Error: {error}</p>}
 
       <div
         style={{
@@ -1276,7 +1240,7 @@ function ProfileTab({
             borderRadius: 10,
             padding: '10px 18px',
             cursor: dirty && !saving ? 'pointer' : 'not-allowed',
-            fontFamily: 'inherit',
+            fontFamily: VP_SANS_FONT,
             fontSize: 14,
             fontWeight: 600,
           }}
@@ -1308,7 +1272,7 @@ function inputStyle(): React.CSSProperties {
     borderRadius: 10,
     padding: 10,
     fontSize: 14,
-    fontFamily: 'inherit',
+    fontFamily: VP_SANS_FONT,
     color: C.text,
     resize: 'vertical',
   };
@@ -1321,7 +1285,7 @@ function ghostButtonStyle(): React.CSSProperties {
     color: C.textMuted,
     fontSize: 12,
     cursor: 'pointer',
-    fontFamily: 'inherit',
+    fontFamily: VP_SANS_FONT,
   };
 }
 
@@ -1354,82 +1318,163 @@ function stringField(obj: Record<string, unknown>, key: string): string | null {
 
 function IconChat() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
     </svg>
   );
 }
 
 function IconTasks() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 11l3 3L22 4"/>
-      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
     </svg>
   );
 }
 
 function IconActivity() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
   );
 }
 
 function IconProfile() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
 
 function IconSend() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13"/>
-      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
     </svg>
   );
 }
 
 function IconRole() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="3" y1="10" x2="21" y2="10" />
     </svg>
   );
 }
 
 function IconLocation() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-      <circle cx="12" cy="10" r="3"/>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
     </svg>
   );
 }
 
 function IconReports() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
 
 function IconFocus() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <circle cx="12" cy="12" r="6"/>
-      <circle cx="12" cy="12" r="2"/>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
     </svg>
   );
 }

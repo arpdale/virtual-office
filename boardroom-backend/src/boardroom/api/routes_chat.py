@@ -59,6 +59,61 @@ class ChatRequest(BaseModel):
     text: str
 
 
+# ── External tool configuration ─────────────────────────────
+
+
+_NOTION_READ_TOOLS = [
+    "mcp__notion__notion-search",
+    "mcp__notion__notion-retrieve-a-page",
+    "mcp__notion__notion-retrieve-a-database",
+    "mcp__notion__notion-query-a-database",
+    "mcp__notion__notion-retrieve-block-children",
+    "mcp__notion__notion-retrieve-a-comment",
+    "mcp__notion__notion-retrieve-a-user",
+    "mcp__notion__notion-list-all-users",
+]
+
+
+def _build_agent_options(
+    *,
+    system_prompt: str,
+    model: str,
+    store: Store,
+    vp: VPRecord,
+) -> ClaudeAgentOptions:
+    """Build ClaudeAgentOptions with memory tools + external tools (WebFetch,
+    WebSearch, Notion read-only) for a single VP turn."""
+    mcp_name = f"boardroom_vp_{vp.id}"
+    mcp_server = build_vp_tools_server(store, vp.id)
+
+    mcp_servers: dict[str, Any] = {mcp_name: mcp_server}
+    allowed: list[str] = [
+        f"mcp__{mcp_name}__recall_memory",
+        f"mcp__{mcp_name}__note_to_self",
+        "WebFetch",
+        "WebSearch",
+    ]
+
+    notion_key = os.environ.get("NOTION_API_KEY", "")
+    if notion_key:
+        mcp_servers["notion"] = {
+            "command": "npx",
+            "args": ["-y", "@notionhq/notion-mcp-server"],
+            "env": {"NOTION_API_KEY": notion_key},
+        }
+        allowed.extend(_NOTION_READ_TOOLS)
+
+    return ClaudeAgentOptions(
+        system_prompt=system_prompt,
+        model=model,
+        tools=["WebFetch", "WebSearch"],
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed,
+        max_turns=8,
+        permission_mode="dontAsk",
+    )
+
+
 # ── System prompt assembly ───────────────────────────────────
 
 
@@ -105,11 +160,16 @@ def assemble_system_prompt(
         "specific. Reference your objectives when relevant. Name tradeoffs and "
         "constraints. Keep your response under 250 words unless the directive "
         "explicitly asks for more.\n\n"
-        "You have two tools available if you need them:\n"
+        "You have tools available if you need them:\n"
         "- `recall_memory(query)` — search your past directives + responses by keyword "
         "if recent-memory above doesn't cover what you need.\n"
         "- `note_to_self(type, content)` — save a typed memory you want preserved. "
-        "Use sparingly; the system already extracts memories from every response."
+        "Use sparingly; the system already extracts memories from every response.\n"
+        "- `WebFetch(url)` — fetch a web page to read its content.\n"
+        "- `WebSearch(query)` — search the web for current information.\n"
+        "- Notion tools (read-only) — search and read pages, databases, and blocks "
+        "in the company Notion workspace. Use these when you need to reference "
+        "shared documents, meeting notes, or project specs."
     )
 
     return "\n".join(parts)
@@ -148,31 +208,25 @@ async def _stream_vp_response(
     recent = store.recent_memories(vp.id, limit=_RECENT_MEMORIES_LIMIT)
     system_prompt = assemble_system_prompt(vp, core_facts, recent)
 
-    # 3. stream tokens — Anthropic SDK if ANTHROPIC_API_KEY is set
-    # (true per-token), else fall back to the claude-agent-sdk CLI path
-    # (chunk-level streaming, no API billing).
+    # 3. stream tokens — always use the CLI path so VPs have access to tools
+    # (memory, WebFetch, WebSearch, Notion). The CLI inherits ANTHROPIC_API_KEY
+    # from the environment if set, otherwise uses `claude login` credentials.
     response_chunks: list[str] = []
     try:
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            async for chunk in _stream_via_anthropic_sdk(
-                system_prompt=system_prompt,
-                directive_text=directive_text,
-                model=model,
-            ):
-                response_chunks.append(chunk)
-                yield _sse_event("token", {"text": chunk})
-        else:
-            async for chunk in _stream_via_cli(
-                vp=vp,
-                store=store,
-                system_prompt=system_prompt,
-                directive_text=directive_text,
-                model=model,
-            ):
-                response_chunks.append(chunk)
-                yield _sse_event("token", {"text": chunk})
+        async for chunk in _stream_via_cli(
+            vp=vp,
+            store=store,
+            system_prompt=system_prompt,
+            directive_text=directive_text,
+            model=model,
+        ):
+            response_chunks.append(chunk)
+            yield _sse_event("token", {"text": chunk})
     except Exception as exc:  # noqa: BLE001
-        yield _sse_event("error", {"message": str(exc)})
+        err = str(exc)
+        if "error result: success" in err:
+            err = "API rate limit exceeded — try again in a moment"
+        yield _sse_event("error", {"message": err})
         return
 
     response_text = "".join(response_chunks).strip()
@@ -269,19 +323,11 @@ async def post_chat_sync(
     recent = store.recent_memories(vp.id, limit=_RECENT_MEMORIES_LIMIT)
     system_prompt = assemble_system_prompt(vp, core_facts, recent)
 
-    mcp_name = f"boardroom_vp_{vp.id}"
-    mcp_server = build_vp_tools_server(store, vp.id)
-    options = ClaudeAgentOptions(
+    options = _build_agent_options(
         system_prompt=system_prompt,
         model=settings.vp_model,
-        tools=[],
-        mcp_servers={mcp_name: mcp_server},
-        allowed_tools=[
-            f"mcp__{mcp_name}__recall_memory",
-            f"mcp__{mcp_name}__note_to_self",
-        ],
-        max_turns=4,
-        permission_mode="dontAsk",
+        store=store,
+        vp=vp,
     )
 
     chunks: list[str] = []
@@ -359,6 +405,10 @@ async def _stream_via_anthropic_sdk(
                 yield text
 
 
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = [2, 5, 10]
+
+
 async def _stream_via_cli(
     *,
     vp: VPRecord,
@@ -367,26 +417,30 @@ async def _stream_via_cli(
     directive_text: str,
     model: str,
 ) -> AsyncIterator[str]:
-    """Fallback: claude-agent-sdk subprocess flow. Chunk-level streaming
-    (whole blocks arrive at once), but uses the Claude Max subscription via
-    `claude login` — no API key needed."""
-    mcp_name = f"boardroom_vp_{vp.id}"
-    mcp_server = build_vp_tools_server(store, vp.id)
-    options = ClaudeAgentOptions(
+    """Claude-agent-sdk subprocess flow. Chunk-level streaming (whole blocks
+    arrive at once). Supports all tools: memory, WebFetch, WebSearch, Notion.
+    Retries on API rate-limit / overload errors (429, 529)."""
+    options = _build_agent_options(
         system_prompt=system_prompt,
         model=model,
-        tools=[],
-        mcp_servers={mcp_name: mcp_server},
-        allowed_tools=[
-            f"mcp__{mcp_name}__recall_memory",
-            f"mcp__{mcp_name}__note_to_self",
-        ],
-        max_turns=4,
-        permission_mode="dontAsk",
+        store=store,
+        vp=vp,
     )
-    async for msg in query(prompt=directive_text, options=options):
-        if not isinstance(msg, AssistantMessage):
-            continue
-        for block in msg.content:
-            if isinstance(block, TextBlock) and block.text:
-                yield block.text
+    for attempt in range(_MAX_RETRIES):
+        try:
+            async for msg in query(prompt=directive_text, options=options):
+                if not isinstance(msg, AssistantMessage):
+                    continue
+                for block in msg.content:
+                    if isinstance(block, TextBlock) and block.text:
+                        yield block.text
+            return
+        except Exception as exc:
+            err = str(exc)
+            is_retryable = "error result: success" in err or "429" in err or "529" in err
+            if is_retryable and attempt < _MAX_RETRIES - 1:
+                wait = _RETRY_BACKOFF[attempt]
+                print(f"[boardroom] {vp.name}: API rate limit, retrying in {wait}s (attempt {attempt + 1}/{_MAX_RETRIES})")
+                await asyncio.sleep(wait)
+                continue
+            raise

@@ -1,12 +1,20 @@
 /**
  * Pre-meeting participant selector. Pick which VPs to bring into the meeting
- * (or "All Hands"), then start.
+ * (or "All Hands"), then start. Supports drag-and-drop reordering — order is
+ * persisted to localStorage so your preferred lineup is remembered.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { listVPs, type VPSummary } from '../services/boardroom.js';
+import {
+  VP_AVATAR_BG,
+  VP_COLORS,
+  VP_ERROR_COLOR,
+  VP_SANS_FONT,
+  VP_SCRIM_MEETING,
+} from '../constants.js';
 import { getHueShiftForVp } from '../office/boardroomRoster.js';
+import { listVPs, type VPSummary } from '../services/boardroom.js';
 import { CharacterPortrait } from './CharacterPortrait.js';
 
 interface Props {
@@ -15,21 +23,41 @@ interface Props {
   onStart: (vpIds: string[], subject: string) => void;
 }
 
-const C = {
-  shellBg: '#f8f1e3',
-  panelBg: '#ffffff',
-  text: '#2a2a2a',
-  textMuted: '#7a7367',
-  border: '#eadfc9',
-  hairline: '#eee8d8',
-  accentBg: '#f3ebd9',
-  accentText: '#7a5a3a',
-  shadow: '0 4px 24px rgba(60, 40, 10, 0.18)',
-  cardShadow: '0 2px 12px rgba(60, 40, 10, 0.08)',
-};
+const C = VP_COLORS;
+const ORDER_KEY = 'vp-meeting-order';
 
-const SANS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif';
+function loadPersistedOrder(): string[] {
+  try {
+    const raw = localStorage.getItem(ORDER_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+function persistOrder(ids: string[]) {
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyPersistedOrder(vps: VPSummary[], saved: string[]): VPSummary[] {
+  if (!saved.length) return vps;
+  const byId = new Map(vps.map((v) => [v.id, v]));
+  const ordered: VPSummary[] = [];
+  for (const id of saved) {
+    const vp = byId.get(id);
+    if (vp) {
+      ordered.push(vp);
+      byId.delete(id);
+    }
+  }
+  for (const vp of byId.values()) ordered.push(vp);
+  return ordered;
+}
 
 export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
   const [vps, setVps] = useState<VPSummary[] | null>(null);
@@ -37,17 +65,32 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
   const [subject, setSubject] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+  const dragNode = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
     listVPs()
       .then((list) => {
-        setVps(list);
-        // Default: select everyone
-        setSelected(new Set(list.map((v) => v.id)));
+        setVps(applyPersistedOrder(list, loadPersistedOrder()));
+        setSelected(new Set());
       })
       .catch((e: unknown) => setError(String(e)));
   }, [isOpen]);
+
+  const reorder = useCallback(
+    (fromIdx: number, toIdx: number) => {
+      if (!vps || fromIdx === toIdx) return;
+      const next = [...vps];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      setVps(next);
+      persistOrder(next.map((v) => v.id));
+    },
+    [vps],
+  );
 
   if (!isOpen) return null;
 
@@ -69,15 +112,45 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
 
   const canStart = selected.size > 0;
   const startMeeting = () => {
-    if (!canStart) return;
-    onStart([...selected], subject.trim() || 'Board Meeting');
+    if (!canStart || !vps) return;
+    const ordered = vps.filter((v) => selected.has(v.id)).map((v) => v.id);
+    onStart(ordered, subject.trim() || 'Meeting');
+  };
+
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    setDragIdx(idx);
+    dragNode.current = e.currentTarget as HTMLElement;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+    requestAnimationFrame(() => {
+      if (dragNode.current) dragNode.current.style.opacity = '0.4';
+    });
+  };
+
+  const handleDragEnd = () => {
+    if (dragNode.current) dragNode.current.style.opacity = '1';
+    dragNode.current = null;
+    setDragIdx(null);
+    setDropIdx(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (idx !== dropIdx) setDropIdx(idx);
+  };
+
+  const handleDrop = (e: React.DragEvent, toIdx: number) => {
+    e.preventDefault();
+    if (dragIdx !== null) reorder(dragIdx, toIdx);
+    handleDragEnd();
   };
 
   return (
     <>
       <div
         className="fixed inset-0"
-        style={{ background: 'rgba(20, 14, 6, 0.6)', zIndex: 80 }}
+        style={{ background: VP_SCRIM_MEETING, zIndex: 80 }}
         onClick={onClose}
       />
       <div
@@ -95,7 +168,7 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          fontFamily: SANS,
+          fontFamily: VP_SANS_FONT,
           color: C.text,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -111,9 +184,9 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
           }}
         >
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>Call a board meeting</div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>Call a meeting</div>
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 2 }}>
-              Pick who you want at the table.
+              Pick who you want at the table. Drag to reorder.
             </div>
           </div>
           <button
@@ -159,7 +232,7 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
               background: C.panelBg,
               border: `1px solid ${C.border}`,
               borderRadius: 10,
-              fontFamily: SANS,
+              fontFamily: VP_SANS_FONT,
               fontSize: 14,
               color: C.text,
             }}
@@ -200,26 +273,51 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
             gap: 8,
           }}
         >
-          {error && <div style={{ color: '#c0392b', fontSize: 13 }}>Error: {error}</div>}
+          {error && <div style={{ color: VP_ERROR_COLOR, fontSize: 13 }}>Error: {error}</div>}
           {!vps && !error && <div style={{ color: C.textMuted }}>Loading…</div>}
-          {vps?.map((vp) => {
+          {vps?.map((vp, idx) => {
             const isOn = selected.has(vp.id);
+            const isDropTarget = dropIdx === idx && dragIdx !== null && dragIdx !== idx;
             return (
               <label
                 key={vp.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDrop={(e) => handleDrop(e, idx)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
                   padding: 12,
-                  border: `1px solid ${isOn ? C.accentText : C.border}`,
+                  border: `1px solid ${isDropTarget ? C.accentText : isOn ? C.accentText : C.border}`,
                   background: isOn ? C.accentBg : C.panelBg,
                   borderRadius: 10,
-                  cursor: 'pointer',
+                  cursor: 'grab',
                   boxShadow: isOn ? 'none' : C.cardShadow,
                   transition: 'background 0.15s, border-color 0.15s',
+                  borderTopWidth: isDropTarget ? 3 : 1,
+                  userSelect: 'none',
                 }}
               >
+                {/* Drag handle */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    color: C.textMuted,
+                    fontSize: 14,
+                    lineHeight: 1,
+                    cursor: 'grab',
+                    padding: '0 2px',
+                  }}
+                  title="Drag to reorder"
+                >
+                  ⠿
+                </div>
+
                 <input
                   type="checkbox"
                   checked={isOn}
@@ -231,7 +329,7 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
                     width: 40,
                     height: 40,
                     borderRadius: '50%',
-                    background: '#d9c8a8',
+                    background: VP_AVATAR_BG,
                     overflow: 'hidden',
                     display: 'flex',
                     alignItems: 'flex-end',
@@ -240,7 +338,12 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
                   }}
                 >
                   <div style={{ width: 28, height: 36, marginBottom: -4 }}>
-                    <CharacterPortrait palette={vp.palette} hueShift={getHueShiftForVp(vp.id)} scale={3} background="transparent" />
+                    <CharacterPortrait
+                      palette={vp.palette}
+                      hueShift={getHueShiftForVp(vp.id)}
+                      scale={3}
+                      background="transparent"
+                    />
                   </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -265,11 +368,7 @@ export function MeetingSelector({ isOpen, onClose, onStart }: Props) {
           <button onClick={onClose} style={ghostButton()}>
             Cancel
           </button>
-          <button
-            onClick={startMeeting}
-            disabled={!canStart}
-            style={primaryButton(!canStart)}
-          >
+          <button onClick={startMeeting} disabled={!canStart} style={primaryButton(!canStart)}>
             Start Meeting →
           </button>
         </div>
@@ -288,7 +387,7 @@ function chipButton(): React.CSSProperties {
     fontWeight: 500,
     cursor: 'pointer',
     color: C.text,
-    fontFamily: SANS,
+    fontFamily: VP_SANS_FONT,
   };
 }
 
@@ -301,20 +400,20 @@ function ghostButton(): React.CSSProperties {
     fontSize: 14,
     cursor: 'pointer',
     color: C.textMuted,
-    fontFamily: SANS,
+    fontFamily: VP_SANS_FONT,
   };
 }
 
 function primaryButton(disabled: boolean): React.CSSProperties {
   return {
     background: disabled ? C.hairline : C.accentText,
-    color: disabled ? C.textMuted : '#ffffff',
+    color: disabled ? C.textMuted : C.panelBg,
     border: 'none',
     borderRadius: 10,
     padding: '10px 18px',
     fontSize: 14,
     fontWeight: 600,
     cursor: disabled ? 'not-allowed' : 'pointer',
-    fontFamily: SANS,
+    fontFamily: VP_SANS_FONT,
   };
 }

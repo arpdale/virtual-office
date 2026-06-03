@@ -27,6 +27,7 @@ SEED_PALETTES: dict[str, int] = {
     "blake_monroe": 3,
     "jordan_brooks": 4,
     "valentina_cruz": 5,
+    "nadia_park": 1,
 }
 
 

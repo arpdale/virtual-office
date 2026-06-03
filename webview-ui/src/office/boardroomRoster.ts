@@ -52,9 +52,7 @@ const HUE_CHOICES = [20, 340, 40, 320, 200, 220, 280];
  * palette get distinct shifts from HUE_CHOICES, deterministically picked from
  * a hash of their vp_id.
  */
-export function computeHueShifts(
-  vps: { id: string; palette: number }[],
-): void {
+export function computeHueShifts(vps: { id: string; palette: number }[]): void {
   hueShiftByVpId.clear();
   // Group VPs by palette
   const byPalette = new Map<number, { id: string; palette: number }[]>();
@@ -81,7 +79,7 @@ export function computeHueShifts(
   }
 }
 
-function lookupOrComputeShift(vpId: string, palette: number): number {
+function lookupOrComputeShift(vpId: string): number {
   const cached = hueShiftByVpId.get(vpId);
   if (cached !== undefined) return cached;
   // Falls through if a VP was added without a prior computeHueShifts(). Assign
@@ -103,7 +101,7 @@ function _spawn(officeState: OfficeState, vp: VPSummary): number {
     vpIdByCharacterId.set(charId, vp.id);
   }
   if (!officeState.characters.has(charId)) {
-    const hueShift = lookupOrComputeShift(vp.id, vp.palette);
+    const hueShift = lookupOrComputeShift(vp.id);
     officeState.addAgent(charId, vp.palette, hueShift);
   }
   const ch = officeState.characters.get(charId);
@@ -170,14 +168,9 @@ export function spawnBoardroomVP(officeState: OfficeState, vp: VPSummary): numbe
  *   - Clear any in-progress wander path and drop to IDLE so the FSM
  *     immediately re-pathfinds.
  */
-export function setVPActive(
-  officeState: OfficeState,
-  vpId: string,
-  active: boolean,
-): boolean {
+export function setVPActive(officeState: OfficeState, vpId: string, active: boolean): boolean {
   const charId = characterIdByVpId.get(vpId);
   if (charId === undefined) {
-    // eslint-disable-next-line no-console
     console.warn(`[boardroom] setVPActive: no character for vp_id=${vpId}`);
     return false;
   }
@@ -224,7 +217,6 @@ export function setVPActive(
         }
       }
       if (!swapped) {
-        // eslint-disable-next-line no-console
         console.warn(`[boardroom] ${vpId}: no reachable DESK seat from current position`);
       }
     }

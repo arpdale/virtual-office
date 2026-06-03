@@ -68,6 +68,8 @@ export interface FurnitureInstance {
   mirrored?: boolean;
   /** When true, the renderer skips drawing this in play mode (still rendered in editor as debug). */
   invisible?: boolean;
+  /** Catalog type key — carried through for runtime catalog lookups (e.g. invisible filtering). */
+  type?: string;
 }
 
 export interface ToolActivity {

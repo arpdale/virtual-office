@@ -99,6 +99,7 @@ export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): Furnit
       x,
       y,
       zY,
+      type: item.type,
       ...(mirrored ? { mirrored: true } : {}),
       ...(entry.invisible ? { invisible: true } : {}),
     });

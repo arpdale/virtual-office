@@ -29,9 +29,7 @@ export function callBoardMeeting(
 ): { sent: number; markers: number; center: { col: number; row: number } | null } {
   // Discover marker furniture and map to seat ids (seat uid === furniture uid
   // for the primary seat of a 1x1 chair, which BOARDROOM_SEAT_MARKER is).
-  const markerFurniture = officeState
-    .getLayout()
-    .furniture.filter((f) => f.type === MARKER_TYPE);
+  const markerFurniture = officeState.getLayout().furniture.filter((f) => f.type === MARKER_TYPE);
   if (markerFurniture.length === 0) {
     return { sent: 0, markers: 0, center: null };
   }
@@ -90,7 +88,7 @@ export function callBoardMeeting(
     if (!chosen) {
       // No marker is reachable from this character's position. Skip — don't
       // pretend they're seated.
-      // eslint-disable-next-line no-console
+
       console.warn(`[boardroom] ${vpId}: no reachable boardroom marker; staying put`);
       continue;
     }
