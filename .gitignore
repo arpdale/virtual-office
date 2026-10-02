@@ -53,3 +53,7 @@ playwright-report/
 
 # Local backup of bundled default office layout (240KB)
 **/default-layout-2.bundled-backup.json
+
+# Private migration backups and local runtime files
+/.local-backups/
+/.local/

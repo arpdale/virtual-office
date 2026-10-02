@@ -1,6 +1,6 @@
 """Storage interface for the 3-tier memory model and VP records.
 
-Backed by Supabase (Postgres). See `supabase_store.py` for the implementation.
+Backed by PostgreSQL (Neon). See `postgres_store.py` for the implementation.
 
 Tiers:
   1. core_facts          — always-injected persistent knowledge (hand-curated)

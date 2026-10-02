@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # noqa: BLE001
         print(f"[boardroom] WARNING: store init/seed failed: {exc}")
         print(
-            "[boardroom] Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env to enable "
+            "[boardroom] Set DATABASE_URL in .env to enable "
             "memory + persistence. /directive still works without a store."
         )
 

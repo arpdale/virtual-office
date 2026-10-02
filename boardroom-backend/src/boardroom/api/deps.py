@@ -17,6 +17,6 @@ def get_store_dep(request: Request) -> Store:
     if store is None:
         raise HTTPException(
             status_code=503,
-            detail="Storage backend not initialized. Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env.",
+            detail="Storage backend not initialized. Set DATABASE_URL in .env.",
         )
     return store

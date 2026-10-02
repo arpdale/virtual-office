@@ -97,8 +97,7 @@ def load_all_vps(vps_dir: Path | None = None) -> list[VPConfig]:
 @dataclass
 class Settings:
     anthropic_api_key: str
-    supabase_url: str
-    supabase_service_key: str
+    database_url: str
     host: str = "127.0.0.1"
     port: int = 8100
     vps_dir: Path = field(default_factory=lambda: Path("./vps").resolve())
@@ -112,8 +111,7 @@ def load_settings() -> Settings:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     return Settings(
         anthropic_api_key=api_key,
-        supabase_url=os.environ.get("SUPABASE_URL", ""),
-        supabase_service_key=os.environ.get("SUPABASE_SERVICE_KEY", ""),
+        database_url=os.environ.get("DATABASE_URL", ""),
         host=os.environ.get("HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", "8100")),
         vps_dir=Path(os.environ.get("BOARDROOM_VPS_DIR", "./vps")).resolve(),

@@ -28,7 +28,10 @@
     "test:server": "cd server && npm test",
     "test": "npm run test:webview && npm run test:server",
     "start": "node dist/cli.js",
-    "knip": "knip"
+    "knip": "knip",
+    "local:start": "python3 scripts/local_app.py start",
+    "local:stop": "python3 scripts/local_app.py stop",
+    "local:backup": "python3 scripts/local_app.py backup"
   },
   "devDependencies": {
     "@asyncapi/cli": "^6.0.0",
