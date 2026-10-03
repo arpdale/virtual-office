@@ -13,7 +13,7 @@ From `~/Projects/virtual-office`:
 ```sh
 npm run local:start   # Start backend (:8100) and UI (http://127.0.0.1:5174)
 npm run local:stop    # Stop them; data in Neon is unaffected
-npm run local:backup  # pg_dump -Fc of Neon into .local-backups/ (uses Docker if pg_dump isn't installed)
+npm run local:backup  # pg_dump -Fc of Neon into .local-backups/ (needs pg_dump: `brew install libpq`)
 ```
 
 Schema: `db/schema.sql` (idempotent). Tests: `TEST_DATABASE_URL="$DATABASE_URL"
@@ -22,7 +22,7 @@ direct (non-pooler) host. Never run session-level `SET` commands over the pooled
 host: Neon's transaction-mode pooler reuses server connections, so the setting
 leaks into the app's connections.
 
-Docker and the local Supabase stack are no longer needed to run the app.
+Docker and the local Supabase stack are no longer used.
 
 ### Migration history and rollback
 
