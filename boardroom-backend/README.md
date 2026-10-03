@@ -24,26 +24,32 @@ leaks into the app's connections.
 
 Docker and the local Supabase stack are no longer used.
 
-### Migration history and rollback
+### Migration history and recovery
 
-- Until May 2026: hosted Supabase project `llsjuxaacdfecxeppbix`. It is still
-  running (and billing). On October 2, 2026 its 5 tables were row-for-row
-  identical to the local copy.
-- September 30 to October 2, 2026: local Supabase in Docker (`supabase/` at the repo
-  root, containers `supabase_*_virtual-office`, volume preserved, stopped).
-- Since October 2, 2026: Neon. Data was copied from the local Supabase database and
-  verified by per-table row count and content hash (8 VPs, 14 templates,
+- Until May 2026: hosted Supabase project `llsjuxaacdfecxeppbix`. Deleted
+  October 2026. On October 2, 2026 its 5 tables were row-for-row identical to the
+  local copy.
+- September 30 to October 2, 2026: local Supabase in Docker (`supabase/` at the
+  repo root). Containers and volumes removed October 2, 2026.
+- Since October 2, 2026: Neon. Data was copied from the local Supabase database
+  and verified by per-table row count and content hash (8 VPs, 14 templates,
   18 directives, 64 memories, 0 core facts).
 
-Backups in `.local-backups/` (ignored by Git): `2026-09-30-hosted/` (hosted
-dump and `original.env`), `2026-10-01_164906/` (local Supabase), `env.pre-neon.bak`
-(backend `.env` before Neon), `2026-10-02_neon-source-data.sql` (the exact
-data loaded into Neon), and later `local:backup` archives. Neon also keeps
-point-in-time history (1 day, as configured on this project).
+Neon is the only live copy. Backups in `.local-backups/` (ignored by Git; copy
+them off this Mac for safety):
 
-To roll back to local Supabase, check out the commit before the Neon migration,
-restore `.local-backups/env.pre-neon.bak` to `boardroom-backend/.env`, and run
-the old launcher. Writes made in Neon after the migration must be exported first.
+- `2026-09-30-hosted/`: dump of the deleted hosted project. Its `original.env`
+  credentials no longer work.
+- `2026-10-01_164906/`: local Supabase `pg_dump -Fc` archive.
+- `2026-10-02_neon-source-data.sql`: the exact data loaded into Neon.
+- `env.pre-neon.bak`: backend `.env` before Neon (points at the removed local
+  stack).
+- Timestamped folders from `npm run local:backup`: Neon archives.
+
+Neon also keeps point-in-time history (1 day, as configured on this project).
+To recover, restore that history from the Neon console, or `pg_restore` a
+`local:backup` archive into a Neon branch or a new project:
+`pg_restore --no-owner --no-privileges -d "$DATABASE_URL" <archive>`.
 
 LangGraph-orchestrated AI VPs powering the boardroom virtual-business platform.
 
